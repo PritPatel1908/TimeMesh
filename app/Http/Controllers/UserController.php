@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use App\Imports\UsersImport;
 use Maatwebsite\Excel\Facades\Excel;
+use Maatwebsite\Excel\Excel as ExcelFormat;
 
 class UserController extends Controller
 {
@@ -174,16 +175,121 @@ class UserController extends Controller
         }
 
         try {
-            Excel::import(new UsersImport, $request->file('file'));
+            if (!$request->hasFile('file')) {
+                return response()->json([
+                    'message' => 'Error importing users',
+                    'error' => 'No file uploaded'
+                ], 422);
+            }
+
+            $file = $request->file('file');
+            if (!$file->isValid()) {
+                return response()->json([
+                    'message' => 'Error importing users',
+                    'error' => 'Invalid file upload'
+                ], 422);
+            }
+
+            Excel::import(new UsersImport, $file);
 
             return response()->json([
                 'message' => 'Users imported successfully'
             ], 201);
+        } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
+            $failures = $e->failures();
+            $errors = [];
+
+            foreach ($failures as $failure) {
+                $errors[] = 'Row ' . $failure->row() . ': ' . implode(', ', $failure->errors());
+            }
+
+            return response()->json([
+                'message' => 'Validation error',
+                'error' => implode('; ', $errors)
+            ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error importing users',
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Download a template file for user import.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse
+     */
+    public function downloadTemplate(Request $request)
+    {
+        $type = $request->query('type', 'xlsx');
+
+        $headers = [
+            'user_code',
+            'first_name',
+            'last_name',
+            'father_name',
+            'mother_name',
+            'address',
+            'contact_no',
+            'guardian_name',
+            'guardian_relation',
+            'guardian_contact_no',
+            'emergency_contact',
+            'email',
+            'room_number',
+            'vehicle_detail',
+            'occupation',
+            'occupation_address',
+            'medical_detail',
+            'other_details',
+            'joining_date',
+            'password'
+        ];
+
+        $data = [
+            $headers,
+            // Add an example row
+            [
+                'USR001',
+                'John',
+                'Doe',
+                'Father Name',
+                'Mother Name',
+                '123 Main St',
+                '1234567890',
+                'Guardian Name',
+                'Father',
+                '9876543210',
+                '5555555555',
+                'john@example.com',
+                'A101',
+                'Vehicle Details',
+                'Engineer',
+                'Work Address',
+                'No medical issues',
+                'Additional notes',
+                now()->format('Y-m-d'),
+                'password123'
+            ]
+        ];
+
+        $format = $type === 'xls' ? ExcelFormat::XLS : ExcelFormat::XLSX;
+        $filename = 'user_import_template.' . $type;
+
+        return Excel::download(new class($data) {
+            protected $data;
+
+            public function __construct($data)
+            {
+                $this->data = $data;
+            }
+
+            public function array(): array
+            {
+                return $this->data;
+            }
+        }, $filename, $format);
     }
 }

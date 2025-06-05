@@ -6,6 +6,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\PunchLogController;
 use App\Http\Controllers\DashboardController;
+use Illuminate\Http\Request;
 
 /*
 |--------------------------------------------------------------------------
@@ -65,6 +66,29 @@ Route::middleware('auth')->group(function () {
 
         // User Import
         Route::post('/users/import', [UserController::class, 'import'])->name('api.users.import');
+        Route::get('/users/template', [UserController::class, 'downloadTemplate'])->name('api.users.template');
+        Route::post('/users/test-upload', function (Request $request) {
+            \Log::info('Test upload request received', ['has_file' => $request->hasFile('file')]);
+
+            if ($request->hasFile('file')) {
+                $file = $request->file('file');
+                \Log::info('File details', [
+                    'name' => $file->getClientOriginalName(),
+                    'size' => $file->getSize(),
+                    'mime' => $file->getMimeType()
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'filename' => $file->getClientOriginalName(),
+                    'size' => $file->getSize(),
+                    'mime' => $file->getMimeType()
+                ]);
+            }
+
+            \Log::warning('No file in request', ['all' => $request->all()]);
+            return response()->json(['success' => false, 'message' => 'No file uploaded'], 400);
+        })->name('api.users.test-upload');
 
         // PunchLogs
         Route::post('/punch-logs', [PunchLogController::class, 'store'])->name('punch-logs.store');

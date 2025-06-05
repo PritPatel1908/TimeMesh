@@ -339,6 +339,7 @@
                 </div>
                 <div class="modal-body">
                     <form id="importUserForm" enctype="multipart/form-data">
+                        @csrf
                         <div class="mb-3">
                             <label for="file_type" class="form-label">File Type</label>
                             <select class="form-select" id="file_type" name="file_type">
@@ -369,26 +370,249 @@
             </div>
         </div>
     </div>
+
+    <!-- Delete User Modal -->
+    <div class="modal fade" id="deleteUserModal" tabindex="-1" aria-labelledby="deleteUserModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteUserModalLabel">Confirm Delete</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete this user? This action cannot be undone.</p>
+                    <input type="hidden" id="delete_user_id">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="deleteUserBtn">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('scripts')
     <script>
+        // Set up axios CSRF token
+        axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]').getAttribute(
+            'content');
+
         document.addEventListener('DOMContentLoaded', function() {
-            // Load users when page loads
+            // Load users when the page loads
             loadUsers();
 
-            // Add user form submission
-            document.getElementById('saveUserBtn').addEventListener('click', function() {
-                saveUser();
+            // Event listeners
+            document.getElementById('saveUserBtn').addEventListener('click', saveUser);
+            document.getElementById('updateUserBtn').addEventListener('click', updateUser);
+            document.getElementById('deleteUserBtn').addEventListener('click', function() {
+                const userId = document.getElementById('delete_user_id').value;
+                deleteUser(userId);
+            });
+            document.getElementById('importUsersBtn').addEventListener('click', importUsers);
+            document.getElementById('downloadTemplateBtn').addEventListener('click', downloadTemplate);
+
+            // File type change event
+            document.getElementById('file_type').addEventListener('change', function() {
+                updateFileAccept();
             });
 
-            // Update user form submission
-            document.getElementById('updateUserBtn').addEventListener('click', function() {
-                updateUser();
-            });
+            // Initialize file accept attribute
+            updateFileAccept();
         });
 
-        // Load all users
+        // Import users
+        function importUsers() {
+            // Make sure the file is included in the form data
+            const fileInput = document.getElementById('import_file');
+            if (fileInput.files.length === 0) {
+                document.getElementById('import_file').classList.add('is-invalid');
+                document.getElementById('file_error').textContent = 'Please select a file to import';
+                return;
+            }
+
+            // Create a new FormData object
+            const formData = new FormData();
+
+            // Add the file to the FormData
+            formData.append('file', fileInput.files[0]);
+
+            // Add the file type
+            const fileType = document.getElementById('file_type').value;
+            formData.append('file_type', fileType);
+
+            // Add CSRF token
+            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            formData.append('_token', token);
+
+            // Debug: Check if file is being added to FormData correctly
+            console.log('File selected:', fileInput.files[0].name);
+
+            // Reset validation errors
+            document.getElementById('file_error').textContent = '';
+            document.getElementById('import_file').classList.remove('is-invalid');
+
+            // Show loading state
+            const importBtn = document.getElementById('importUsersBtn');
+            const originalBtnText = importBtn.innerHTML;
+            importBtn.innerHTML =
+                '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Importing...';
+            importBtn.disabled = true;
+
+            // Debug: Log the FormData (won't show file content but confirms it's there)
+            for (let pair of formData.entries()) {
+                console.log(pair[0] + ': ' + (pair[1] instanceof File ? pair[1].name : pair[1]));
+            }
+
+            // First test if file upload works with the test endpoint
+            testFileUpload(formData)
+                .then(result => {
+                    if (result) {
+                        // If test succeeds, proceed with the actual import
+                        proceedWithImport(formData);
+                    } else {
+                        // If test fails, restore button state
+                        importBtn.innerHTML = originalBtnText;
+                        importBtn.disabled = false;
+                    }
+                });
+        }
+
+        // Test file upload functionality
+        function testFileUpload(formData) {
+            return axios.post('/api/users/test-upload', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
+                })
+                .then(function(response) {
+                    console.log('Test upload success:', response.data);
+                    return true;
+                })
+                .catch(function(error) {
+                    console.error('Test upload failed:', error);
+                    showAlert('Error uploading file: ' + (error.response?.data?.message || error.message), 'danger');
+                    return false;
+                });
+        }
+
+        // Proceed with actual import after test
+        function proceedWithImport(formData) {
+            // Get CSRF token directly
+            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+            axios.post('/api/users/import', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                        'X-CSRF-TOKEN': token
+                    }
+                })
+                .then(function(response) {
+                    console.log('Success response:', response);
+                    // Close modal and reset form
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('importUserModal'));
+                    modal.hide();
+                    document.getElementById('importUserForm').reset();
+
+                    // Show success message and reload users
+                    showAlert('Users imported successfully', 'success');
+                    loadUsers();
+                })
+                .catch(function(error) {
+                    console.error('Import error:', error);
+                    if (error.response) {
+                        console.error('Error response data:', error.response.data);
+                        console.error('Error response status:', error.response.status);
+
+                        if (error.response.status === 422) {
+                            // Validation errors
+                            const errors = error.response.data.errors;
+                            if (errors && errors.file) {
+                                document.getElementById('import_file').classList.add('is-invalid');
+                                document.getElementById('file_error').textContent = errors.file[0];
+                            }
+                        }
+                    }
+
+                    let errorMessage = 'Error importing users';
+                    if (error.response && error.response.data && error.response.data.error) {
+                        errorMessage += ': ' + error.response.data.error;
+                    } else if (error.message) {
+                        errorMessage += ': ' + error.message;
+                    }
+                    showAlert(errorMessage, 'danger');
+                })
+                .finally(function() {
+                    // Restore button state
+                    const importBtn = document.getElementById('importUsersBtn');
+                    importBtn.innerHTML = 'Import';
+                    importBtn.disabled = false;
+                });
+        }
+
+        // Download template file
+        function downloadTemplate() {
+            const fileType = document.getElementById('file_type').value;
+            let templateUrl;
+
+            // Create template file based on selected type
+            if (fileType === 'csv') {
+                templateUrl = createCSVTemplate();
+            } else {
+                // For Excel files, we'll use a server endpoint
+                templateUrl = `/api/users/template?type=${fileType}`;
+                window.location.href = templateUrl;
+                return;
+            }
+
+            // For CSV, we can create it client-side
+            const link = document.createElement('a');
+            link.href = templateUrl;
+            link.download = `user_import_template.${fileType}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(templateUrl);
+        }
+
+        // Create CSV template
+        function createCSVTemplate() {
+            const headers = [
+                'user_code', 'first_name', 'last_name', 'father_name', 'mother_name',
+                'address', 'contact_no', 'guardian_name', 'guardian_relation', 'guardian_contact_no',
+                'emergency_contact', 'email', 'room_number', 'vehicle_detail', 'occupation',
+                'occupation_address', 'medical_detail', 'other_details', 'joining_date', 'password'
+            ];
+
+            const csvContent = headers.join(',') + '\n';
+            const blob = new Blob([csvContent], {
+                type: 'text/csv;charset=utf-8;'
+            });
+            return URL.createObjectURL(blob);
+        }
+
+        // Update file input accept attribute based on selected file type
+        function updateFileAccept() {
+            const fileType = document.getElementById('file_type').value;
+            const fileInput = document.getElementById('import_file');
+
+            switch (fileType) {
+                case 'csv':
+                    fileInput.accept = '.csv';
+                    break;
+                case 'xlsx':
+                    fileInput.accept = '.xlsx';
+                    break;
+                case 'xls':
+                    fileInput.accept = '.xls';
+                    break;
+                default:
+                    fileInput.accept = '.csv,.xlsx,.xls';
+            }
+        }
+
+        // Load users from API
         function loadUsers() {
             const tableBody = document.getElementById('usersTableBody');
             const loadingSpinner = document.getElementById('loadingSpinner');

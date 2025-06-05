@@ -20,7 +20,7 @@ class UsersImport implements ToModel, WithHeadingRow, WithValidation
         // Set default password if not provided
         $password = isset($row['password']) && !empty($row['password'])
             ? Hash::make($row['password'])
-            : Hash::make('password123');
+            : Hash::make('welcome');
 
         return new User([
             'user_code' => $row['user_code'],
