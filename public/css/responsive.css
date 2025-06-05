@@ -1,0 +1,212 @@
+/* Responsive CSS for Hostel Management System */
+
+/* General Responsive Styles */
+html, body {
+    overflow-x: hidden;
+}
+
+/* Small devices (phones) */
+@media (max-width: 575.98px) {
+    h1, .h1 {
+        font-size: 1.75rem;
+    }
+    
+    h2, .h2 {
+        font-size: 1.5rem;
+    }
+    
+    .container-fluid {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+    
+    .card {
+        margin-bottom: 0.75rem;
+    }
+    
+    .card-body {
+        padding: 0.75rem;
+    }
+    
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+    
+    .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+    }
+    
+    .modal-body {
+        padding: 0.75rem;
+    }
+    
+    /* Reports page specific fixes */
+    .card-header .d-flex {
+        flex-direction: column;
+        align-items: flex-start !important;
+    }
+    
+    .card-header .d-flex h5 {
+        margin-bottom: 10px;
+    }
+    
+    .card-header form.d-flex {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .card-header form.d-flex .d-flex {
+        width: 100%;
+        margin-right: 0 !important;
+    }
+    
+    .card-header form.d-flex .form-control,
+    .card-header form.d-flex .form-select {
+        width: 100%;
+        margin-bottom: 8px;
+    }
+    
+    .card-header form.d-flex button {
+        width: 100%;
+        margin-top: 5px;
+    }
+    
+    .dropdown {
+        width: 100%;
+        margin-top: 10px;
+    }
+    
+    .dropdown-toggle {
+        width: 100%;
+    }
+}
+
+/* Medium devices (tablets) */
+@media (min-width: 576px) and (max-width: 767.98px) {
+    .card-body {
+        padding: 1rem;
+    }
+    
+    /* Reports page specific fixes */
+    .card-header .d-flex {
+        flex-wrap: wrap;
+    }
+    
+    .card-header form.d-flex {
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+        width: 100%;
+    }
+    
+    .card-header form.d-flex .d-flex {
+        margin-bottom: 8px;
+        width: 100%;
+    }
+}
+
+/* Touch devices optimization */
+@media (hover: none) {
+    .nav-link:hover {
+        background-color: transparent !important;
+    }
+    
+    .btn:hover {
+        opacity: 1 !important;
+    }
+}
+
+/* Fix for tables on mobile */
+@media (max-width: 767.98px) {
+    .table-responsive .table {
+        min-width: 650px;
+    }
+    
+    /* Improve report tables */
+    .table-responsive {
+        border: 0;
+        margin-bottom: 0;
+    }
+    
+    .table-responsive .table th,
+    .table-responsive .table td {
+        padding: 0.5rem;
+    }
+    
+    .badge {
+        font-size: 0.7rem;
+        padding: 0.25em 0.5em;
+    }
+}
+
+/* Fix for modal forms on small screens */
+@media (max-width: 575.98px) {
+    .modal-dialog {
+        margin: 0.5rem;
+    }
+    
+    .form-control {
+        font-size: 0.875rem;
+        padding: 0.25rem 0.5rem;
+        height: calc(1.5em + 0.5rem + 2px);
+    }
+    
+    .form-label {
+        margin-bottom: 0.25rem;
+        font-size: 0.875rem;
+    }
+    
+    textarea.form-control {
+        min-height: 60px;
+    }
+}
+
+/* Fix for dashboard cards on small screens */
+@media (max-width: 575.98px) {
+    .card-title {
+        font-size: 0.875rem;
+    }
+    
+    .card h2 {
+        font-size: 1.5rem;
+    }
+    
+    .fa-3x {
+        font-size: 2em;
+    }
+}
+
+/* Improve sidebar transition */
+.sidebar {
+    transition: left 0.3s ease;
+}
+
+/* Improve table responsiveness */
+.table-responsive {
+    scrollbar-width: thin;
+}
+
+.table-responsive::-webkit-scrollbar {
+    height: 6px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Additional fixes for reports header */
+@media (max-width: 991.98px) {
+    .card-header .d-flex.justify-content-between {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .card-header .d-flex.align-items-center {
+        width: 100%;
+    }
+} 
