@@ -36,8 +36,13 @@ return [
     ],
 
     'whatsapp' => [
-        'endpoint' => env('WHATSAPP_API_ENDPOINT', 'https://api.whatsapp.com/send'),
-        'api_key' => env('WHATSAPP_API_KEY'),
+        'api_endpoint' => env('WHATSAPP_API_ENDPOINT', 'https://us-central1-pristine-nomad-264707.cloudfunctions.net/SendTemplateWhatsappV2'),
+        'from_mobile_no' => env('WHATSAPP_FROM_MOBILE_NO', '918200599525'),
+        'fb_token' => env('WHATSAPP_FB_TOKEN', 'EAB8uAArmndABO4ewJWGktpcbuBfZAiFV6XUIOYdEr9FR8L05gprGxlb1Sx9DNFwY9q1A8f3NcZAcs4b7DhE9nZBT5ZACPLxNIL3J0vTNHpvuam7zfrsHcwYilrmVybIowxY7xWapORJIUoPMcqWykvnFjgsnBqvZBURIzKEkUMZAfdPlQJdQ0b6W63W2sBgJ6i'),
+        'employee_name' => env('WHATSAPP_EMPLOYEE_NAME', 'emp_name'),
+        'hostel_location' => env('WHATSAPP_HOSTEL_LOCATION', 'Navrangpura'),
+        'hostel_name' => env('WHATSAPP_HOSTEL_NAME', 'LN Stay'),
+        'contact_number' => env('WHATSAPP_CONTACT_NUMBER', '9876543210'),
     ],
 
     'twilio' => [

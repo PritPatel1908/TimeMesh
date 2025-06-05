@@ -78,7 +78,7 @@ class ProcessPunchLogs extends Command
             }
 
             // Send WhatsApp message
-            $messageSent = $whatsAppService->sendMessage($user->guardian_contact_no, $message);
+            $messageSent = $whatsAppService->sendMessage($user->guardian_contact_no, $message, $user->first_name, $user->last_name);
 
             // Update WhatsApp status counts
             $whatsappStatus->total_message_count += 1;

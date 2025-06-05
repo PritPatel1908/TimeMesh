@@ -3,20 +3,22 @@
 namespace App\Services;
 
 use Exception;
-use Twilio\Rest\Client;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Config;
 
 class WhatsAppService
 {
     /**
-     * Send WhatsApp message using the Twilio API.
+     * Send WhatsApp message using the WhatsApp API.
      *
      * @param string $phoneNumber
      * @param string $message
+     * @param string|null $firstName
+     * @param string|null $lastName
      * @return bool
      */
-    public function sendMessage(string $phoneNumber, string $message): bool
+    public function sendMessage(string $phoneNumber, string $message, string $firstName = null, string $lastName = null): bool
     {
         try {
             // Remove any spaces or special characters from the phone number
@@ -30,40 +32,50 @@ class WhatsAppService
             // Log the attempt
             Log::info("Attempting to send WhatsApp message to: {$phoneNumber}");
 
-            // Get Twilio credentials from config
-            $sid = Config::get('services.twilio.sid');
-            $token = Config::get('services.twilio.token');
-            $fromNumber = Config::get('services.twilio.whatsapp_from');
-            $contentSid = Config::get('services.twilio.content_sid');
+            // Get API settings from config
+            $fromMobileNo = Config::get('services.whatsapp.from_mobile_no', '918200599525');
+            $fbToken = Config::get('services.whatsapp.fb_token', 'EAB8uAArmndABO4ewJWGktpcbuBfZAiFV6XUIOYdEr9FR8L05gprGxlb1Sx9DNFwY9q1A8f3NcZAcs4b7DhE9nZBT5ZACPLxNIL3J0vTNHpvuam7zfrsHcwYilrmVybIowxY7xWapORJIUoPMcqWykvnFjgsnBqvZBURIzKEkUMZAfdPlQJdQ0b6W63W2sBgJ6i');
+            $apiEndpoint = Config::get('services.whatsapp.api_endpoint', 'https://us-central1-pristine-nomad-264707.cloudfunctions.net/SendTemplateWhatsappV2');
+            $hostelLocation = Config::get('services.whatsapp.hostel_location', 'Nikol');
+            $contactNumber = Config::get('services.whatsapp.contact_number', '9876543210');
+            $hostelName = Config::get('services.whatsapp.hostel_name', 'LN Stay');
 
-            // Create Twilio client
-            $twilio = new Client($sid, $token);
+            // Parse message to extract required variables
+            $messageParts = $this->parseMessage($message, $firstName, $lastName);
 
-            // Get user details from the message
-            // Extract name, status, time, etc. from the message
-            $messageParts = $this->parseMessage($message);
-
-            // Send WhatsApp message using Twilio template
-            $twilioMessage = $twilio->messages->create(
-                'whatsapp:+' . $phoneNumber, // to
-                [
-                    'from' => $fromNumber,
-                    'contentSid' => $contentSid,
-                    'contentVariables' => json_encode([
-                        '1' => $messageParts['guardian_name'] ?? 'Guardian',
-                        '2' => $messageParts['student_name'] ?? 'Student',
-                        '3' => $messageParts['location'] ?? 'Hostel',
-                        '4' => $messageParts['time'] ?? date('H:i'),
-                        '5' => $phoneNumber,
-                        '6' => 'SardarPatel Girls Hostel',
-                        '7' => 'Provided by www.sardarpatelhostel.com',
-                    ]),
+            // Prepare payload for WhatsApp API
+            $payload = [
+                "FromMobileNo" => $fromMobileNo,
+                "FBToken" => $fbToken,
+                "toMobileNo" => $phoneNumber,
+                "TemplateName" => "inoutpunch",
+                "TemplateLanguage" => "en",
+                "TemplateMsgString" => "{{ 1 }}\nDear {{ 2 }},\n\nWe would like to inform you that your ward {{ 3 }} has {{ 4 }} the hostel premises {{ 5 }} at {{ 6 }}\n\nIf you have any questions, feel free to contact us at {{ 7 }}\n\n- {{ 8 }}\n\n{{ 9 }}",
+                "EmployeeName" => Config::get('services.whatsapp.employee_name', 'Suhag Patel'),
+                "Variables" => [
+                    ["Variable" => "Greetings"],
+                    ["Variable" => $messageParts['guardian_name']],
+                    ["Variable" => $messageParts['student_name']],
+                    ["Variable" => ucfirst($messageParts['status'])],
+                    ["Variable" => $hostelLocation],
+                    ["Variable" => $messageParts['time']],
+                    ["Variable" => $contactNumber],
+                    ["Variable" => $hostelName],
+                    ["Variable" => "Thank you"]
                 ]
-            );
+            ];
 
-            // Log the response
-            Log::info("Twilio WhatsApp message sent with SID: " . $twilioMessage->sid);
-            return true;
+            // Send request to WhatsApp API
+            $response = Http::post($apiEndpoint, $payload);
+
+            // Check if the request was successful
+            if ($response->successful()) {
+                Log::info("WhatsApp message sent successfully to: {$phoneNumber}");
+                return true;
+            } else {
+                Log::error("Failed to send WhatsApp message. API response: " . $response->body());
+                return false;
+            }
         } catch (Exception $e) {
             // Log any exceptions
             Log::error("Exception while sending WhatsApp message: " . $e->getMessage());
@@ -75,14 +87,16 @@ class WhatsAppService
      * Parse message to extract relevant information for the template.
      *
      * @param string $message
+     * @param string|null $firstName
+     * @param string|null $lastName
      * @return array
      */
-    private function parseMessage(string $message): array
+    private function parseMessage(string $message, string $firstName = null, string $lastName = null): array
     {
         $result = [
             'guardian_name' => 'Guardian',
             'student_name' => 'Student',
-            'location' => 'Hostel',
+            'status' => 'entered',
             'time' => date('H:i'),
         ];
 
@@ -91,9 +105,19 @@ class WhatsAppService
             $result['guardian_name'] = trim($matches[1]);
         }
 
-        // Extract student name
-        if (preg_match('/your ward\s+([^has]+)has/', $message, $matches)) {
-            $result['student_name'] = trim($matches[1]);
+        // Use provided first name and last name if available
+        if ($firstName !== null && $lastName !== null) {
+            $result['student_name'] = trim("$firstName $lastName");
+        } else {
+            // Fallback to extracting from message
+            if (preg_match('/your ward\s+([^has]+)has/', $message, $matches)) {
+                $result['student_name'] = trim($matches[1]);
+            }
+        }
+
+        // Extract status (entered/exited)
+        if (preg_match('/has\s+(entered|exited)/', $message, $matches)) {
+            $result['status'] = trim($matches[1]);
         }
 
         // Extract time
@@ -103,9 +127,6 @@ class WhatsAppService
                 $result['time'] = $time->format('H:i');
             }
         }
-
-        // Extract location (default is "Hostel")
-        $result['location'] = 'Nikol';
 
         return $result;
     }

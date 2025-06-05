@@ -40,9 +40,14 @@ class DashboardController extends Controller
             })
             ->get();
 
-        // Count users inside and outside based on their latest status
-        $insideCount = $latestPunchLogs->where('punch_status', 1)->count();
+        // Get total user count
+        $totalUserCount = User::where('id', '!=', 1)->count();
+
+        // Count users outside based on their latest status
         $outsideCount = $latestPunchLogs->where('punch_status', 0)->count();
+
+        // Count users inside (total users minus those who are outside)
+        $insideCount = $totalUserCount - $outsideCount;
 
         // Get last 10 IN users with eager loading of user relationship
         $lastInUsers = PunchLog::with(['user' => function ($query) {

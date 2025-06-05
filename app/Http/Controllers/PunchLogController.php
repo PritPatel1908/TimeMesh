@@ -103,7 +103,7 @@ class PunchLogController extends Controller
                 $punchLog->punch_date_time->format('d-m-Y h:i A') . ".";
 
             // Send WhatsApp message
-            $messageSent = $whatsAppService->sendMessage($user->guardian_contact_no, $message);
+            $messageSent = $whatsAppService->sendMessage($user->guardian_contact_no, $message, $user->first_name, $user->last_name);
 
             // Update WhatsApp status counts
             $whatsappStatus->total_message_count += 1;
@@ -164,7 +164,7 @@ class PunchLogController extends Controller
             $punchLog->punch_date_time->format('d-m-Y h:i A') . ".";
 
         // Send WhatsApp message
-        $messageSent = $whatsAppService->sendMessage($user->guardian_contact_no, $message);
+        $messageSent = $whatsAppService->sendMessage($user->guardian_contact_no, $message, $user->first_name, $user->last_name);
 
         // Update WhatsApp status counts
         $whatsappStatus->total_message_count += 1;
@@ -205,9 +205,14 @@ class PunchLogController extends Controller
             })
             ->get();
 
-        // Count users inside and outside based on their latest status
-        $insideCount = $latestPunchLogs->where('punch_status', 1)->count();
+        // Get total user count (excluding admin user with ID 1)
+        $totalUserCount = User::where('id', '!=', 1)->count();
+
+        // Count users outside based on their latest status
         $outsideCount = $latestPunchLogs->where('punch_status', 0)->count();
+
+        // Count users inside (total users minus those who are outside)
+        $insideCount = $totalUserCount - $outsideCount;
 
         // Get last 10 IN users with eager loading of user relationship
         $lastInUsers = PunchLog::with(['user' => function ($query) {
@@ -288,7 +293,7 @@ class PunchLogController extends Controller
             }
 
             // Send WhatsApp message
-            $messageSent = $whatsAppService->sendMessage($user->guardian_contact_no, $message);
+            $messageSent = $whatsAppService->sendMessage($user->guardian_contact_no, $message, $user->first_name, $user->last_name);
 
             // Update WhatsApp status counts
             $whatsappStatus->total_message_count += 1;
