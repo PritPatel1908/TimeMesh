@@ -8,6 +8,7 @@ use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithValidation;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class UsersImport implements ToModel, WithHeadingRow, WithValidation
 {
@@ -23,23 +24,25 @@ class UsersImport implements ToModel, WithHeadingRow, WithValidation
             ? Hash::make($row['password'])
             : Hash::make('welcome');
 
-        // Process joining date if provided
+        // Process joining date if provided - ensure SQL Server compatible format
         $joiningDate = null;
         if (isset($row['joining_date']) && !empty($row['joining_date'])) {
             try {
-                $joiningDate = Carbon::parse($row['joining_date']);
+                // Parse the date and format it in a SQL Server compatible format
+                $joiningDate = Carbon::parse($row['joining_date'])->format('Y-m-d H:i:s');
             } catch (\Exception $e) {
-                $joiningDate = now();
+                $joiningDate = now()->format('Y-m-d H:i:s');
             }
         } else {
-            $joiningDate = now();
+            $joiningDate = now()->format('Y-m-d H:i:s');
         }
 
-        // Process left date if provided
+        // Process left date if provided - ensure SQL Server compatible format
         $leftDate = null;
         if (isset($row['left_date']) && !empty($row['left_date'])) {
             try {
-                $leftDate = Carbon::parse($row['left_date']);
+                // Parse the date and format it in a SQL Server compatible format
+                $leftDate = Carbon::parse($row['left_date'])->format('Y-m-d H:i:s');
             } catch (\Exception $e) {
                 $leftDate = null;
             }
@@ -76,6 +79,28 @@ class UsersImport implements ToModel, WithHeadingRow, WithValidation
      */
     public function rules(): array
     {
+        // For SQL Server, we need to handle case-insensitive uniqueness differently
+        $connection = DB::connection()->getDriverName();
+
+        if ($connection === 'sqlsrv') {
+            // For SQL Server, we'll check uniqueness in a case-insensitive way
+            return [
+                'user_code' => [
+                    'required',
+                    function ($attribute, $value, $fail) {
+                        $exists = User::whereRaw('LOWER(user_code) = ?', [strtolower($value)])->exists();
+                        if ($exists) {
+                            $fail('The user code has already been taken.');
+                        }
+                    }
+                ],
+                'first_name' => 'required',
+                'contact_no' => 'required',
+                'guardian_name' => 'required',
+            ];
+        }
+
+        // Default rules for other database systems
         return [
             'user_code' => 'required|unique:users,user_code',
             'first_name' => 'required',

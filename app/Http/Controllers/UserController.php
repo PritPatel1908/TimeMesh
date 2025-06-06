@@ -208,8 +208,13 @@ class UserController extends Controller
                 ], 422);
             }
 
-            // Import the users
-            Excel::import(new UsersImport, $file);
+            // Import the users with batch size configuration to avoid memory issues
+            $config = [
+                'batch_size' => 100, // Process 100 rows at a time
+                'chunk_size' => 50,  // Read 50 rows at a time
+            ];
+
+            Excel::import(new UsersImport, $file, null, null, $config);
 
             return response()->json([
                 'message' => 'Users imported successfully'
@@ -231,19 +236,26 @@ class UserController extends Controller
             $errorCode = $e->errorInfo[1] ?? '';
             $errorMessage = 'Database error';
 
-            if ($errorCode == 1062) { // MySQL duplicate entry error code
+            // SQL Server error codes
+            if ($errorCode == 2601 || $errorCode == 2627) { // SQL Server duplicate key error codes
                 $errorMessage = 'Duplicate user code found in import file';
+            } elseif ($errorCode == 8152) { // String or binary data would be truncated
+                $errorMessage = 'Data too long for one or more columns';
+            } elseif ($errorCode == 547) { // Foreign key constraint violation
+                $errorMessage = 'Foreign key constraint violation';
             }
 
             return response()->json([
                 'message' => 'Error importing users',
                 'error' => $errorMessage,
-                'details' => $e->getMessage()
+                'details' => $e->getMessage(),
+                'error_code' => $errorCode
             ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error importing users',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'file' => get_class($e)
             ], 500);
         }
     }
