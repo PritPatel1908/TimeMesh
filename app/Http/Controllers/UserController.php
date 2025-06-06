@@ -15,12 +15,30 @@ class UserController extends Controller
     /**
      * Display a listing of the users.
      *
+     * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function index()
+    public function index(Request $request)
     {
-        $users = User::where('id', '!=', 1)->orderBy('user_code')->get();
-        return response()->json(['users' => $users]);
+        $perPage = $request->query('per_page', 10);
+        $search = $request->query('search', '');
+
+        $query = User::where('id', '!=', 1);
+
+        // Apply search if provided
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('user_code', 'like', "%{$search}%")
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('room_number', 'like', "%{$search}%")
+                    ->orWhere('contact_no', 'like', "%{$search}%");
+            });
+        }
+
+        $users = $query->orderBy('user_code')->paginate($perPage);
+
+        return response()->json($users);
     }
 
     /**
@@ -190,6 +208,7 @@ class UserController extends Controller
                 ], 422);
             }
 
+            // Import the users
             Excel::import(new UsersImport, $file);
 
             return response()->json([
@@ -204,8 +223,22 @@ class UserController extends Controller
             }
 
             return response()->json([
-                'message' => 'Validation error',
-                'error' => implode('; ', $errors)
+                'message' => 'Validation error during import',
+                'errors' => $errors
+            ], 422);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Handle database-related errors (like duplicate entries)
+            $errorCode = $e->errorInfo[1] ?? '';
+            $errorMessage = 'Database error';
+
+            if ($errorCode == 1062) { // MySQL duplicate entry error code
+                $errorMessage = 'Duplicate user code found in import file';
+            }
+
+            return response()->json([
+                'message' => 'Error importing users',
+                'error' => $errorMessage,
+                'details' => $e->getMessage()
             ], 422);
         } catch (\Exception $e) {
             return response()->json([
@@ -245,6 +278,8 @@ class UserController extends Controller
             'medical_detail',
             'other_details',
             'joining_date',
+            'left_date',
+            'left_remark',
             'password'
         ];
 
@@ -271,6 +306,8 @@ class UserController extends Controller
                 'No medical issues',
                 'Additional notes',
                 now()->format('Y-m-d'),
+                '', // left_date
+                '', // left_remark
                 'password123'
             ]
         ];

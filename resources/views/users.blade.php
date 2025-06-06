@@ -12,6 +12,21 @@
             padding: 20px;
         }
 
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+        }
+
+        .page-info {
+            font-size: 0.9rem;
+        }
+
+        .search-container {
+            margin-bottom: 20px;
+        }
+
         @media (max-width: 767.98px) {
             .user-actions .btn {
                 padding: 0.25rem 0.5rem;
@@ -46,6 +61,30 @@
         <!-- Alert Messages -->
         <div id="alertContainer"></div>
 
+        <!-- Search and Per Page Controls -->
+        <div class="row search-container">
+            <div class="col-md-6 mb-2 mb-md-0">
+                <div class="input-group">
+                    <input type="text" id="searchInput" class="form-control" placeholder="Search users...">
+                    <button class="btn btn-outline-secondary" type="button" id="searchButton">
+                        <i class="fas fa-search"></i> Search
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-6 text-md-end">
+                <div class="input-group justify-content-md-end">
+                    <label class="input-group-text" for="perPageSelect">Show</label>
+                    <select class="form-select" id="perPageSelect" style="max-width: 80px;">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                    <span class="input-group-text">per page</span>
+                </div>
+            </div>
+        </div>
+
         <!-- Users Table -->
         <div class="card">
             <div class="card-body">
@@ -70,6 +109,18 @@
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
+                </div>
+
+                <!-- Pagination Controls -->
+                <div class="pagination-container">
+                    <div class="page-info">
+                        Showing <span id="fromRecord">0</span> to <span id="toRecord">0</span> of <span id="totalRecords">0</span> entries
+                    </div>
+                    <nav aria-label="User pagination">
+                        <ul class="pagination" id="paginationContainer">
+                            <!-- Pagination will be generated here -->
+                        </ul>
+                    </nav>
                 </div>
             </div>
         </div>
@@ -395,12 +446,17 @@
 
 @section('scripts')
     <script>
+        // Global variables for pagination
+        let currentPage = 1;
+        let lastPage = 1;
+        let perPage = 10;
+        let searchTerm = '';
+
         // Set up axios CSRF token
-        axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]').getAttribute(
-            'content');
+        axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
         document.addEventListener('DOMContentLoaded', function() {
-            // Load users when the page loads
+            // Initial load
             loadUsers();
 
             // Event listeners
@@ -412,89 +468,273 @@
             });
             document.getElementById('importUsersBtn').addEventListener('click', importUsers);
             document.getElementById('downloadTemplateBtn').addEventListener('click', downloadTemplate);
-
-            // File type change event
-            document.getElementById('file_type').addEventListener('change', function() {
-                updateFileAccept();
-            });
+            document.getElementById('file_type').addEventListener('change', updateFileAccept);
 
             // Initialize file accept attribute
             updateFileAccept();
+
+            // Pagination event listeners
+            document.getElementById('searchButton').addEventListener('click', function() {
+                searchTerm = document.getElementById('searchInput').value;
+                currentPage = 1; // Reset to first page on new search
+                loadUsers();
+            });
+
+            document.getElementById('searchInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchTerm = document.getElementById('searchInput').value;
+                    currentPage = 1; // Reset to first page on new search
+                    loadUsers();
+                }
+            });
+
+            document.getElementById('perPageSelect').addEventListener('change', function() {
+                perPage = this.value;
+                currentPage = 1; // Reset to first page when changing items per page
+                loadUsers();
+            });
         });
+
+        // Load users from API with pagination
+        function loadUsers() {
+            const tableBody = document.getElementById('usersTableBody');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+
+            // Show loading spinner
+            tableBody.innerHTML = '';
+            loadingSpinner.style.display = 'block';
+
+            // Build query parameters
+            const params = new URLSearchParams({
+                page: currentPage,
+                per_page: perPage
+            });
+
+            if (searchTerm) {
+                params.append('search', searchTerm);
+            }
+
+            axios.get(`/api/users?${params.toString()}`)
+                .then(function(response) {
+                    loadingSpinner.style.display = 'none';
+                    const data = response.data;
+                    const users = data.data; // Laravel pagination puts items in data property
+
+                    // Update pagination information
+                    lastPage = data.last_page;
+                    currentPage = data.current_page;
+
+                    // Update pagination display
+                    updatePaginationInfo(data.from, data.to, data.total);
+                    generatePaginationLinks(data.current_page, data.last_page);
+
+                    if (users.length === 0) {
+                        tableBody.innerHTML = '<tr><td colspan="6" class="text-center">No users found</td></tr>';
+                        return;
+                    }
+
+                    users.forEach(function(user) {
+                        const fullName = `${user.first_name} ${user.last_name || ''}`;
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                        <td>${user.user_code}</td>
+                        <td>${fullName}</td>
+                        <td>${user.room_number || ''}</td>
+                        <td>${user.contact_no}</td>
+                        <td>${formatDate(user.joining_date)}</td>
+                        <td class="user-actions">
+                            <button class="btn btn-sm btn-primary edit-user" data-id="${user.id}">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger delete-user" data-id="${user.id}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    `;
+                        tableBody.appendChild(row);
+
+                        // Add event listeners to the buttons
+                        row.querySelector('.edit-user').addEventListener('click', function() {
+                            openEditModal(user.id);
+                        });
+
+                        row.querySelector('.delete-user').addEventListener('click', function() {
+                            openDeleteModal(user.id);
+                        });
+                    });
+                })
+                .catch(function(error) {
+                    loadingSpinner.style.display = 'none';
+                    showAlert('Error loading users: ' + error.message, 'danger');
+                });
+        }
+
+        // Update pagination information display
+        function updatePaginationInfo(from, to, total) {
+            document.getElementById('fromRecord').textContent = from || 0;
+            document.getElementById('toRecord').textContent = to || 0;
+            document.getElementById('totalRecords').textContent = total || 0;
+        }
+
+        // Generate pagination links
+        function generatePaginationLinks(currentPage, lastPage) {
+            const paginationContainer = document.getElementById('paginationContainer');
+            paginationContainer.innerHTML = '';
+
+            // Previous button
+            const prevLi = document.createElement('li');
+            prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+            const prevLink = document.createElement('a');
+            prevLink.className = 'page-link';
+            prevLink.href = '#';
+            prevLink.innerHTML = '&laquo;';
+            prevLink.setAttribute('aria-label', 'Previous');
+            if (currentPage > 1) {
+                prevLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    goToPage(currentPage - 1);
+                });
+            }
+            prevLi.appendChild(prevLink);
+            paginationContainer.appendChild(prevLi);
+
+            // Calculate range of pages to show
+            let startPage = Math.max(1, currentPage - 2);
+            let endPage = Math.min(lastPage, startPage + 4);
+
+            // Adjust if we're near the end
+            if (endPage - startPage < 4 && startPage > 1) {
+                startPage = Math.max(1, endPage - 4);
+            }
+
+            // First page link if not in range
+            if (startPage > 1) {
+                const firstLi = document.createElement('li');
+                firstLi.className = 'page-item';
+                const firstLink = document.createElement('a');
+                firstLink.className = 'page-link';
+                firstLink.href = '#';
+                firstLink.textContent = '1';
+                firstLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    goToPage(1);
+                });
+                firstLi.appendChild(firstLink);
+                paginationContainer.appendChild(firstLi);
+
+                // Add ellipsis if needed
+                if (startPage > 2) {
+                    const ellipsisLi = document.createElement('li');
+                    ellipsisLi.className = 'page-item disabled';
+                    const ellipsisSpan = document.createElement('span');
+                    ellipsisSpan.className = 'page-link';
+                    ellipsisSpan.innerHTML = '&hellip;';
+                    ellipsisLi.appendChild(ellipsisSpan);
+                    paginationContainer.appendChild(ellipsisLi);
+                }
+            }
+
+            // Page numbers
+            for (let i = startPage; i <= endPage; i++) {
+                const pageLi = document.createElement('li');
+                pageLi.className = `page-item ${i === currentPage ? 'active' : ''}`;
+                const pageLink = document.createElement('a');
+                pageLink.className = 'page-link';
+                pageLink.href = '#';
+                pageLink.textContent = i;
+                if (i !== currentPage) {
+                    pageLink.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        goToPage(i);
+                    });
+                }
+                pageLi.appendChild(pageLink);
+                paginationContainer.appendChild(pageLi);
+            }
+
+            // Add ellipsis and last page if needed
+            if (endPage < lastPage) {
+                if (endPage < lastPage - 1) {
+                    const ellipsisLi = document.createElement('li');
+                    ellipsisLi.className = 'page-item disabled';
+                    const ellipsisSpan = document.createElement('span');
+                    ellipsisSpan.className = 'page-link';
+                    ellipsisSpan.innerHTML = '&hellip;';
+                    ellipsisLi.appendChild(ellipsisSpan);
+                    paginationContainer.appendChild(ellipsisLi);
+                }
+
+                const lastLi = document.createElement('li');
+                lastLi.className = 'page-item';
+                const lastLink = document.createElement('a');
+                lastLink.className = 'page-link';
+                lastLink.href = '#';
+                lastLink.textContent = lastPage;
+                lastLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    goToPage(lastPage);
+                });
+                lastLi.appendChild(lastLink);
+                paginationContainer.appendChild(lastLi);
+            }
+
+            // Next button
+            const nextLi = document.createElement('li');
+            nextLi.className = `page-item ${currentPage === lastPage ? 'disabled' : ''}`;
+            const nextLink = document.createElement('a');
+            nextLink.className = 'page-link';
+            nextLink.href = '#';
+            nextLink.innerHTML = '&raquo;';
+            nextLink.setAttribute('aria-label', 'Next');
+            if (currentPage < lastPage) {
+                nextLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    goToPage(currentPage + 1);
+                });
+            }
+            nextLi.appendChild(nextLink);
+            paginationContainer.appendChild(nextLi);
+        }
+
+        // Go to specific page
+        function goToPage(page) {
+            currentPage = page;
+            loadUsers();
+        }
 
         // Import users
         function importUsers() {
-            // Make sure the file is included in the form data
+            const form = document.getElementById('importUserForm');
             const fileInput = document.getElementById('import_file');
-            if (fileInput.files.length === 0) {
+            const importBtn = document.getElementById('importUsersBtn');
+
+            // Reset validation errors
+            document.getElementById('import_file').classList.remove('is-invalid');
+            document.getElementById('file_error').textContent = '';
+
+            // Check if file is selected
+            if (!fileInput.files.length) {
                 document.getElementById('import_file').classList.add('is-invalid');
                 document.getElementById('file_error').textContent = 'Please select a file to import';
                 return;
             }
 
-            // Create a new FormData object
+            // Create form data
             const formData = new FormData();
-
-            // Add the file to the FormData
             formData.append('file', fileInput.files[0]);
 
-            // Add the file type
-            const fileType = document.getElementById('file_type').value;
-            formData.append('file_type', fileType);
-
-            // Add CSRF token
-            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            formData.append('_token', token);
-
-            // Debug: Check if file is being added to FormData correctly
-            console.log('File selected:', fileInput.files[0].name);
-
-            // Reset validation errors
-            document.getElementById('file_error').textContent = '';
-            document.getElementById('import_file').classList.remove('is-invalid');
-
-            // Show loading state
-            const importBtn = document.getElementById('importUsersBtn');
-            const originalBtnText = importBtn.innerHTML;
-            importBtn.innerHTML =
-                '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Importing...';
+            // Disable button and show loading state
             importBtn.disabled = true;
+            importBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Importing...';
 
-            // Debug: Log the FormData (won't show file content but confirms it's there)
-            for (let pair of formData.entries()) {
-                console.log(pair[0] + ': ' + (pair[1] instanceof File ? pair[1].name : pair[1]));
-            }
-
-            // First test if file upload works with the test endpoint
-            testFileUpload(formData)
-                .then(result => {
-                    if (result) {
-                        // If test succeeds, proceed with the actual import
-                        proceedWithImport(formData);
-                    } else {
-                        // If test fails, restore button state
-                        importBtn.innerHTML = originalBtnText;
-                        importBtn.disabled = false;
-                    }
-                });
+            // First test the import
+            testImport(formData);
         }
 
-        // Test file upload functionality
-        function testFileUpload(formData) {
-            return axios.post('/api/users/test-upload', formData, {
-                    headers: {
-                        'Content-Type': 'multipart/form-data'
-                    }
-                })
-                .then(function(response) {
-                    console.log('Test upload success:', response.data);
-                    return true;
-                })
-                .catch(function(error) {
-                    console.error('Test upload failed:', error);
-                    showAlert('Error uploading file: ' + (error.response?.data?.message || error.message), 'danger');
-                    return false;
-                });
+        // Test import before proceeding
+        function testImport(formData) {
+            // Proceed with actual import
+            proceedWithImport(formData);
         }
 
         // Proceed with actual import after test
@@ -517,6 +757,9 @@
 
                     // Show success message and reload users
                     showAlert('Users imported successfully', 'success');
+
+                    // Reset to first page and reload
+                    currentPage = 1;
                     loadUsers();
                 })
                 .catch(function(error) {
@@ -612,61 +855,6 @@
             }
         }
 
-        // Load users from API
-        function loadUsers() {
-            const tableBody = document.getElementById('usersTableBody');
-            const loadingSpinner = document.getElementById('loadingSpinner');
-
-            // Show loading spinner
-            tableBody.innerHTML = '';
-            loadingSpinner.style.display = 'block';
-
-            axios.get('/api/users')
-                .then(function(response) {
-                    loadingSpinner.style.display = 'none';
-                    const users = response.data.users;
-
-                    if (users.length === 0) {
-                        tableBody.innerHTML = '<tr><td colspan="6" class="text-center">No users found</td></tr>';
-                        return;
-                    }
-
-                    users.forEach(function(user) {
-                        const fullName = `${user.first_name} ${user.last_name}`;
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                        <td>${user.user_code}</td>
-                        <td>${fullName}</td>
-                        <td>${user.room_number}</td>
-                        <td>${user.contact_no}</td>
-                        <td>${formatDate(user.joining_date)}</td>
-                        <td class="user-actions">
-                            <button class="btn btn-sm btn-primary edit-user" data-id="${user.id}">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="btn btn-sm btn-danger delete-user" data-id="${user.id}">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </td>
-                    `;
-                        tableBody.appendChild(row);
-
-                        // Add event listeners to the buttons
-                        row.querySelector('.edit-user').addEventListener('click', function() {
-                            openEditModal(user.id);
-                        });
-
-                        row.querySelector('.delete-user').addEventListener('click', function() {
-                            openDeleteModal(user.id);
-                        });
-                    });
-                })
-                .catch(function(error) {
-                    loadingSpinner.style.display = 'none';
-                    showAlert('Error loading users: ' + error.message, 'danger');
-                });
-        }
-
         // Save new user
         function saveUser() {
             const form = document.getElementById('addUserForm');
@@ -687,6 +875,9 @@
 
                     // Show success message and reload users
                     showAlert('User created successfully', 'success');
+
+                    // Reset to first page and reload
+                    currentPage = 1;
                     loadUsers();
                 })
                 .catch(function(error) {
@@ -755,7 +946,7 @@
 
                     // Show success message and reload users
                     showAlert('User updated successfully', 'success');
-                    loadUsers();
+                    loadUsers(); // Stay on current page
                 })
                 .catch(function(error) {
                     if (error.response && error.response.status === 422) {
@@ -785,6 +976,11 @@
 
                     // Show success message and reload users
                     showAlert('User deleted successfully', 'success');
+
+                    // If we're on the last page and there's only one user, go to previous page
+                    if (currentPage === lastPage && document.querySelectorAll('#usersTableBody tr').length === 1 && currentPage > 1) {
+                        currentPage--;
+                    }
                     loadUsers();
                 })
                 .catch(function(error) {
