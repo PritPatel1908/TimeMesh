@@ -36,9 +36,9 @@
                                 <label for="status" class="form-label">Status</label>
                                 <select name="status" id="status" class="form-select">
                                     <option value="">All Status</option>
-                                    <option value="1" {{ request('status') === '1' ? 'selected' : '' }}>In (Entry)
+                                    <option value="1" {{ request('status') === '1' ? 'selected' : '' }}>Out (Exit)
                                     </option>
-                                    <option value="0" {{ request('status') === '0' ? 'selected' : '' }}>Out (Exit)
+                                    <option value="0" {{ request('status') === '0' ? 'selected' : '' }}>In (Entry)
                                     </option>
                                 </select>
                             </div>
@@ -79,9 +79,9 @@
                                             </td>
                                             <td>
                                                 @if ($log->punch_status)
-                                                    <span class="badge bg-success">In (Entry)</span>
-                                                @else
                                                     <span class="badge bg-danger">Out (Exit)</span>
+                                                @else
+                                                    <span class="badge bg-success">In (Entry)</span>
                                                 @endif
                                             </td>
                                             <td>

@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->dateTime('punch_date_time');
             $table->string('user_code');
-            $table->boolean('punch_status')->comment('true for in, false for out');
+            $table->boolean('punch_status')->comment('true for out, false for in');
             $table->boolean('send_message')->default(false);
             $table->boolean('is_process')->default(false);
             $table->timestamps();

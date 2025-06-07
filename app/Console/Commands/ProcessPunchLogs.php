@@ -61,7 +61,7 @@ class ProcessPunchLogs extends Command
             }
 
             // Prepare message based on punch status
-            $status = $log->punch_status ? 'entered' : 'exited';
+            $status = $log->punch_status ? 'exited' : 'entered';
             $message = "Dear {$user->guardian_name}, your ward {$user->first_name} {$user->last_name} has {$status} the hostel at " .
                 $log->punch_date_time->format('d-m-Y h:i A') . ".";
 
@@ -80,9 +80,7 @@ class ProcessPunchLogs extends Command
             // Send WhatsApp message
             $messageSent = $whatsAppService->sendMessage($user->guardian_contact_no, $message, $user->first_name, $user->last_name);
 
-            // Update WhatsApp status counts
-            $whatsappStatus->total_message_count += 1;
-
+            // Update WhatsApp status counts only if message was sent successfully
             if ($messageSent) {
                 // Message sent successfully
                 $this->info("Message sent successfully to {$user->guardian_contact_no}");

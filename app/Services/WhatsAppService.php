@@ -65,8 +65,8 @@ class WhatsAppService
                 ]
             ];
 
-            // Send request to WhatsApp API
-            $response = Http::post($apiEndpoint, $payload);
+            // Send request to WhatsApp API with SSL verification disabled
+            $response = Http::withoutVerifying()->post($apiEndpoint, $payload);
 
             // Check if the request was successful
             if ($response->successful()) {

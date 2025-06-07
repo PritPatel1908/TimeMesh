@@ -98,16 +98,14 @@ class PunchLogController extends Controller
             $whatsAppService = new WhatsAppService();
 
             // Prepare message based on punch status
-            $status = $punchLog->punch_status ? 'entered' : 'exited';
+            $status = $punchLog->punch_status ? 'exited' : 'entered';
             $message = "Dear {$user->guardian_name}, your ward {$user->first_name} {$user->last_name} has {$status} the hostel at " .
                 $punchLog->punch_date_time->format('d-m-Y h:i A') . ".";
 
             // Send WhatsApp message
             $messageSent = $whatsAppService->sendMessage($user->guardian_contact_no, $message, $user->first_name, $user->last_name);
 
-            // Update WhatsApp status counts
-            $whatsappStatus->total_message_count += 1;
-
+            // Update WhatsApp status counts only if message was sent successfully
             if ($messageSent) {
                 // Message sent successfully
                 $whatsappStatus->success_message_count += 1;
@@ -159,16 +157,14 @@ class PunchLogController extends Controller
         $whatsAppService = new WhatsAppService();
 
         // Prepare message based on punch status
-        $status = $punchLog->punch_status ? 'entered' : 'exited';
+        $status = $punchLog->punch_status ? 'exited' : 'entered';
         $message = "Dear {$user->guardian_name}, your ward {$user->first_name} {$user->last_name} has {$status} the hostel at " .
             $punchLog->punch_date_time->format('d-m-Y h:i A') . ".";
 
         // Send WhatsApp message
         $messageSent = $whatsAppService->sendMessage($user->guardian_contact_no, $message, $user->first_name, $user->last_name);
 
-        // Update WhatsApp status counts
-        $whatsappStatus->total_message_count += 1;
-
+        // Update WhatsApp status counts only if message was sent successfully
         if ($messageSent) {
             // Message sent successfully
             $whatsappStatus->success_message_count += 1;
@@ -209,7 +205,7 @@ class PunchLogController extends Controller
         $totalUserCount = User::where('id', '!=', 1)->count();
 
         // Count users outside based on their latest status
-        $outsideCount = $latestPunchLogs->where('punch_status', 0)->count();
+        $outsideCount = $latestPunchLogs->where('punch_status', 1)->count();
 
         // Count users inside (total users minus those who are outside)
         $insideCount = $totalUserCount - $outsideCount;
@@ -218,7 +214,7 @@ class PunchLogController extends Controller
         $lastInUsers = PunchLog::with(['user' => function ($query) {
             $query->select('id', 'user_code', 'first_name', 'last_name');
         }])
-            ->where('punch_status', true)
+            ->where('punch_status', false)
             ->orderBy('punch_date_time', 'desc')
             ->limit(10)
             ->get();
@@ -227,7 +223,7 @@ class PunchLogController extends Controller
         $lastOutUsers = PunchLog::with(['user' => function ($query) {
             $query->select('id', 'user_code', 'first_name', 'last_name');
         }])
-            ->where('punch_status', false)
+            ->where('punch_status', true)
             ->orderBy('punch_date_time', 'desc')
             ->limit(10)
             ->get();
@@ -278,7 +274,7 @@ class PunchLogController extends Controller
             }
 
             // Prepare message based on punch status
-            $status = $log->punch_status ? 'entered' : 'exited';
+            $status = $log->punch_status ? 'exited' : 'entered';
             $message = "Dear {$user->guardian_name}, your ward {$user->first_name} {$user->last_name} has {$status} the hostel at " .
                 $log->punch_date_time->format('d-m-Y h:i A') . ".";
 
@@ -295,9 +291,7 @@ class PunchLogController extends Controller
             // Send WhatsApp message
             $messageSent = $whatsAppService->sendMessage($user->guardian_contact_no, $message, $user->first_name, $user->last_name);
 
-            // Update WhatsApp status counts
-            $whatsappStatus->total_message_count += 1;
-
+            // Update WhatsApp status counts only if message was sent successfully
             if ($messageSent) {
                 // Message sent successfully
                 $whatsappStatus->success_message_count += 1;
